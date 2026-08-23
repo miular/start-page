@@ -1,0 +1,1 @@
+export { getFaviconUrl, getInitials, getFaviconFallbackChain } from "./favicon";
