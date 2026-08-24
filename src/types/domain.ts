@@ -5,7 +5,15 @@ export type Bookmark = {
   title: string;
   url: string;
   icon?: string;
-  category?: string;
+  categoryId?: string;
+  order: number;
+  lastUsedAt?: string;
+};
+
+export type Category = {
+  id: string;
+  name: string;
+  icon: string;
   order: number;
 };
 
@@ -26,6 +34,7 @@ export type Settings = {
   theme: ThemeMode;
   searchEngineId: string;
   showQuote: boolean;
+  customWallpaperUrl?: string;
 };
 
 export type Persisted<T> = {

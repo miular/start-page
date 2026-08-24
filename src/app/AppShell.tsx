@@ -3,21 +3,26 @@ import { ThemeProvider } from "./providers/ThemeProvider";
 import { Clock } from "../features/clock";
 import { Quote } from "../features/quote";
 import { SearchBar } from "../features/search";
-import { BookmarkList } from "../features/bookmarks";
+import { Workspace } from "../features/workspace";
+import { RecentBookmarks } from "../features/recent";
+import { Sidebar } from "../features/sidebar";
 import { SettingsDialog } from "../features/settings";
 import { GlassIcon } from "../ui/glass";
 import { Icon } from "../ui/icon";
 import { storage } from "../lib/storage";
-import { useRandomWallpaper, useWallpaperColor } from "../lib/wallpaper";
+import { useWallpaper, useWallpaperColor } from "../lib/wallpaper";
 import { defaultBookmarks } from "../data/default-bookmarks";
+import { defaultCategories } from "../data/default-categories";
 import { searchEngines } from "../data/search-engines";
-import type { Bookmark, Settings } from "../types/domain";
+import type { Bookmark, Category, Settings } from "../types/domain";
 
 const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   searchEngineId: "google",
   showQuote: true,
 };
+
+const WALLPAPER_KEY = "selected-wallpaper";
 
 function loadSettings(): Settings {
   const stored = storage.get<Settings>("settings");
@@ -28,9 +33,69 @@ function saveSettings(settings: Settings): void {
   storage.set("settings", settings);
 }
 
+function loadWallpaperPath(): string | null {
+  return storage.get<string>(WALLPAPER_KEY);
+}
+
+function saveWallpaperPath(path: string | null): void {
+  if (path) {
+    storage.set(WALLPAPER_KEY, path);
+  } else {
+    storage.remove(WALLPAPER_KEY);
+  }
+}
+
+function loadCategories(): Category[] {
+  const stored = storage.get<Category[]>("categories");
+  if (stored && stored.length > 0) {
+    const existingIds = new Set(stored.map((c) => c.id));
+    const merged = [...stored];
+    for (const dc of defaultCategories) {
+      if (!existingIds.has(dc.id)) {
+        merged.push({ ...dc });
+      }
+    }
+    if (merged.length !== stored.length) {
+      storage.set("categories", merged);
+    }
+    return merged;
+  }
+  const copy = defaultCategories.map((c) => ({ ...c }));
+  storage.set("categories", copy);
+  return copy;
+}
+
+function saveCategories(categories: Category[]): void {
+  storage.set("categories", categories);
+}
+
 function loadBookmarks(): Bookmark[] {
   const stored = storage.get<Bookmark[]>("bookmarks");
-  if (stored && stored.length > 0) return stored;
+  if (stored && stored.length > 0) {
+    let needsSave = false;
+    const migrated = stored.map((b) => {
+      const old = b as Record<string, unknown>;
+      if (old.category && !b.categoryId) {
+        needsSave = true;
+        return { ...b, categoryId: old.category as string, category: undefined };
+      }
+      return b;
+    });
+    const existingIds = new Set(migrated.map((b) => b.id));
+    const merged = [...migrated];
+    let maxOrder = migrated.reduce((max, b) => Math.max(max, b.order), -1);
+    for (const db of defaultBookmarks) {
+      if (!existingIds.has(db.id)) {
+        maxOrder++;
+        merged.push({ ...db, order: maxOrder });
+        needsSave = true;
+      }
+    }
+    if (needsSave) {
+      storage.set("bookmarks", merged);
+    }
+    return merged;
+  }
   const copy = defaultBookmarks.map((b) => ({ ...b }));
   storage.set("bookmarks", copy);
   return copy;
@@ -47,9 +112,11 @@ function generateId(): string {
 export function AppShell() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
+  const [categories, setCategories] = useState<Category[]>(loadCategories);
   const [showSettings, setShowSettings] = useState(false);
-  const wallpaper = useRandomWallpaper();
-  useWallpaperColor(wallpaper, settings.theme);
+  const [selectedWallpaper, setSelectedWallpaper] = useState<string | null>(loadWallpaperPath);
+  const wallpaper = useWallpaper(selectedWallpaper, settings.customWallpaperUrl);
+  useWallpaperColor(wallpaper?.url ?? null, settings.theme);
 
   useEffect(() => {
     saveSettings(settings);
@@ -58,6 +125,10 @@ export function AppShell() {
   useEffect(() => {
     saveBookmarks(bookmarks);
   }, [bookmarks]);
+
+  useEffect(() => {
+    saveCategories(categories);
+  }, [categories]);
 
   const engine = searchEngines.find((e) => e.id === settings.searchEngineId) ?? searchEngines[0];
 
@@ -89,55 +160,116 @@ export function AppShell() {
     });
   }, []);
 
+  const handleBookmarkTrackUse = useCallback((bookmark: Bookmark) => {
+    setBookmarks((prev) => prev.map((b) =>
+      b.id === bookmark.id ? { ...b, lastUsedAt: new Date().toISOString() } : b,
+    ));
+  }, []);
+
+  const handleCategoryAdd = useCallback(
+    (data: Omit<Category, "id" | "order">) => {
+      const maxOrder = categories.reduce((max, c) => Math.max(max, c.order), -1);
+      const newCategory: Category = {
+        id: generateId(),
+        ...data,
+        order: maxOrder + 1,
+      };
+      setCategories((prev) => [...prev, newCategory]);
+    },
+    [categories],
+  );
+
+  const handleCategoryEdit = useCallback((updated: Category) => {
+    setCategories((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+  }, []);
+
+  const handleCategoryDelete = useCallback((id: string) => {
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    setBookmarks((prev) => prev.filter((b) => b.categoryId !== id));
+  }, []);
+
   const handleSettingsUpdate = useCallback((newSettings: Settings) => {
     setSettings(newSettings);
+  }, []);
+
+  const handleWallpaperChange = useCallback((path: string | null) => {
+    setSelectedWallpaper(path);
+    saveWallpaperPath(path);
   }, []);
 
   return (
     <ThemeProvider theme={settings.theme}>
       {wallpaper && (
         <>
-          <div
-            className="wallpaper-bg"
-            style={{ backgroundImage: `url(${wallpaper})` }}
-            aria-hidden="true"
-          />
+          {wallpaper.isVideo ? (
+            <video
+              className="wallpaper-video"
+              src={wallpaper.url}
+              autoPlay
+              loop
+              muted
+              playsInline
+              aria-hidden="true"
+            />
+          ) : (
+            <div
+              className="wallpaper-bg"
+              style={{ backgroundImage: `url(${wallpaper.url})` }}
+              aria-hidden="true"
+            />
+          )}
           <div className="wallpaper-overlay" aria-hidden="true" />
         </>
       )}
-      <div className="app-shell">
-        <main className="app-main">
-          <div className="hero-section">
-            <Clock />
-            <SearchBar engine={engine} />
-          </div>
-          <BookmarkList
-            bookmarks={bookmarks}
-            onOpen={handleBookmarkOpen}
-            onAdd={handleBookmarkAdd}
-            onEdit={handleBookmarkEdit}
-            onDelete={handleBookmarkDelete}
-            onReorder={(b) => setBookmarks(b)}
-          />
-        </main>
-        <Quote show={settings.showQuote} />
-        <footer className="app-footer">
-          <GlassIcon
-            size={36}
-            variant="interactive"
-            onClick={() => setShowSettings(true)}
-            aria-label="Settings"
-          >
-            <Icon name="settings" size={18} />
-          </GlassIcon>
-        </footer>
-        <SettingsDialog
-          open={showSettings}
-          onClose={() => setShowSettings(false)}
-          settings={settings}
-          onUpdate={handleSettingsUpdate}
-        />
+      <Sidebar
+        categories={categories}
+        bookmarks={bookmarks}
+        onBookmarkOpen={handleBookmarkOpen}
+        onBookmarkAdd={handleBookmarkAdd}
+        onBookmarkEdit={handleBookmarkEdit}
+        onBookmarkDelete={handleBookmarkDelete}
+        onBookmarkReorder={(b) => setBookmarks(b)}
+        onCategoryAdd={handleCategoryAdd}
+        onCategoryEdit={handleCategoryEdit}
+        onCategoryDelete={handleCategoryDelete}
+      />
+      <div className="page-scroller">
+        <section className="page page--hero">
+          <main className="app-main">
+            <div className="hero-section">
+              <Clock />
+              <SearchBar engine={engine} />
+            </div>
+            <RecentBookmarks
+              bookmarks={bookmarks}
+              onOpen={handleBookmarkOpen}
+              onTrackUse={handleBookmarkTrackUse}
+            />
+          </main>
+          <Quote show={settings.showQuote} />
+        </section>
+        <section className="page page--workspace">
+          <Workspace />
+        </section>
       </div>
+      <footer className="app-footer">
+        <GlassIcon
+          size={36}
+          variant="interactive"
+          onClick={() => setShowSettings(true)}
+          aria-label="Settings"
+        >
+          <Icon name="settings" size={18} />
+        </GlassIcon>
+      </footer>
+      <SettingsDialog
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+        settings={settings}
+        onUpdate={handleSettingsUpdate}
+        selectedWallpaperPath={selectedWallpaper}
+        onWallpaperChange={handleWallpaperChange}
+      />
     </ThemeProvider>
   );
 }

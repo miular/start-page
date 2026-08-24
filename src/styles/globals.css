@@ -1,6 +1,7 @@
 @import "./tokens.css";
 @import "./themes.css";
 @import "./glass.css";
+@import "./workspace.css";
 
 *,
 *::before,
@@ -33,9 +34,8 @@ body {
 }
 
 #root {
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 button {

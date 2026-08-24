@@ -1,5 +1,7 @@
-export { getWallpaperUrls } from "./wallpaper-list";
-export { useRandomWallpaper } from "./use-wallpaper";
+export { getWallpaperUrls, getWallpaperEntries, getWallpaperEntriesWithPath } from "./wallpaper-list";
+export type { WallpaperEntry, WallpaperEntryWithPath } from "./wallpaper-list";
+export { useWallpaper } from "./use-wallpaper";
+export type { WallpaperInfo } from "./use-wallpaper";
 export { useWallpaperColor } from "./use-wallpaper-color";
 export { extractWallpaperColor, rgbToHsl, deriveGlassTokens } from "./color-extract";
 export type { SampledColor } from "./color-extract";

@@ -24,10 +24,12 @@ export function useWallpaperColor(url: string | null, theme: ThemeMode): void {
   useEffect(() => {
     if (!url || prefersReducedTransparency()) return;
 
+    const isVideo = /\.mp4$/i.test(url);
     const wallpaperUrl: string = url;
     let cancelled = false;
 
     async function apply() {
+      if (isVideo) return;
       const color = await extractWallpaperColor(wallpaperUrl);
       if (cancelled || !color) return;
 
