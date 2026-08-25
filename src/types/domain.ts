@@ -30,11 +30,14 @@ export type Quote = {
   source?: string;
 };
 
+export type WallpaperSource =
+  | { kind: "preset"; path: string }
+  | { kind: "upload"; id: string };
+
 export type Settings = {
   theme: ThemeMode;
   searchEngineId: string;
   showQuote: boolean;
-  customWallpaperUrl?: string;
 };
 
 export type Persisted<T> = {

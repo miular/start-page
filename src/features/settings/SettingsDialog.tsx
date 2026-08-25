@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog } from "../../ui/dialog";
-import type { Settings, SearchEngine, ThemeMode } from "../../types/domain";
+import type { Settings, SearchEngine, ThemeMode, WallpaperSource } from "../../types/domain";
+import type { UploadedWallpaperMeta } from "../../lib/wallpaper/image-store";
 import { searchEngines as allEngines } from "../../data/search-engines";
 import { getWallpaperEntriesWithPath } from "../../lib/wallpaper";
 import { getTerminalToken, setTerminalToken, clearTerminalToken } from "../../lib/terminal/token";
@@ -10,8 +11,11 @@ type SettingsDialogProps = {
   onClose: () => void;
   settings: Settings;
   onUpdate: (settings: Settings) => void;
-  selectedWallpaperPath: string | null;
-  onWallpaperChange: (path: string | null) => void;
+  selectedWallpaper: WallpaperSource | null;
+  onWallpaperChange: (source: WallpaperSource | null) => void;
+  uploadedWallpapers: UploadedWallpaperMeta[];
+  onUploadWallpaper: (file: File) => void;
+  onDeleteUploadWallpaper: (id: string) => void;
 };
 
 export function SettingsDialog({
@@ -19,11 +23,31 @@ export function SettingsDialog({
   onClose,
   settings,
   onUpdate,
-  selectedWallpaperPath,
+  selectedWallpaper,
   onWallpaperChange,
+  uploadedWallpapers,
+  onUploadWallpaper,
+  onDeleteUploadWallpaper,
 }: SettingsDialogProps) {
-  const wallpapers = getWallpaperEntriesWithPath();
+  const presets = getWallpaperEntriesWithPath();
   const [tokenInput, setTokenInput] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function isSelected(source: WallpaperSource | null): boolean {
+    if (!source && !selectedWallpaper) return true;
+    if (!source || !selectedWallpaper) return false;
+    if (source.kind !== selectedWallpaper.kind) return false;
+    if (source.kind === "preset") return source.path === (selectedWallpaper as WallpaperSource & { kind: "preset" }).path;
+    return source.id === (selectedWallpaper as WallpaperSource & { kind: "upload" }).id;
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    onUploadWallpaper(file);
+    e.target.value = "";
+  }
 
   return (
     <Dialog open={open} onClose={onClose} title="Settings">
@@ -49,23 +73,17 @@ export function SettingsDialog({
         <h3 className="settings-section-title">Wallpaper</h3>
         <div className="wallpaper-picker">
           <button
-            className={`wallpaper-thumb ${!selectedWallpaperPath && !settings.customWallpaperUrl ? "wallpaper-thumb--active" : ""}`}
-            onClick={() => {
-              onWallpaperChange(null);
-              onUpdate({ ...settings, customWallpaperUrl: undefined });
-            }}
+            className={`wallpaper-thumb ${!selectedWallpaper ? "wallpaper-thumb--active" : ""}`}
+            onClick={() => onWallpaperChange(null)}
             title="Random"
           >
             <span className="wallpaper-thumb-label">Random</span>
           </button>
-          {wallpapers.map((wp) => (
+          {presets.map((wp) => (
             <button
               key={wp.path}
-              className={`wallpaper-thumb ${selectedWallpaperPath === wp.path ? "wallpaper-thumb--active" : ""}`}
-              onClick={() => {
-                onWallpaperChange(wp.path);
-                onUpdate({ ...settings, customWallpaperUrl: undefined });
-              }}
+              className={`wallpaper-thumb ${isSelected({ kind: "preset", path: wp.path }) ? "wallpaper-thumb--active" : ""}`}
+              onClick={() => onWallpaperChange({ kind: "preset", path: wp.path })}
               title={wp.path}
             >
               {wp.isVideo ? (
@@ -78,22 +96,40 @@ export function SettingsDialog({
               )}
             </button>
           ))}
+          {uploadedWallpapers.map((meta) => (
+            <div key={meta.id} className="wallpaper-thumb-wrapper">
+              <button
+                className={`wallpaper-thumb ${isSelected({ kind: "upload", id: meta.id }) ? "wallpaper-thumb--active" : ""}`}
+                onClick={() => onWallpaperChange({ kind: "upload", id: meta.id })}
+                title={meta.name}
+              >
+                <UploadThumbnail id={meta.id} name={meta.name} />
+              </button>
+              <button
+                className="wallpaper-thumb-remove"
+                onClick={(e) => { e.stopPropagation(); onDeleteUploadWallpaper(meta.id); }}
+                aria-label={`Delete ${meta.name}`}
+                title="Delete"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
         </div>
-        <div className="settings-custom-wallpaper">
-          <label className="form-field">
-            <span className="form-label">Custom wallpaper URL</span>
-            <input
-              className="form-input"
-              type="text"
-              value={settings.customWallpaperUrl ?? ""}
-              onChange={(e) => {
-                const val = e.target.value.trim();
-                onWallpaperChange(null);
-                onUpdate({ ...settings, customWallpaperUrl: val || undefined });
-              }}
-              placeholder="https://example.com/wallpaper.jpg"
-            />
-          </label>
+        <div className="settings-upload-area">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={handleFileChange}
+          />
+          <button
+            className="settings-upload-btn"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Upload image
+          </button>
         </div>
       </div>
 
@@ -168,4 +204,23 @@ export function SettingsDialog({
       </div>
     </Dialog>
   );
+}
+
+function UploadThumbnail({ id, name }: { id: string; name: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getWallpaperBlob(id).then((blob) => {
+      if (cancelled || !blob) return;
+      const objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
+    });
+    return () => { cancelled = true; };
+  }, [id]);
+
+  if (!url) {
+    return <div className="wallpaper-thumb-media wallpaper-thumb-placeholder">{name[0].toUpperCase()}</div>;
+  }
+  return <img src={url} alt={name} className="wallpaper-thumb-media" />;
 }

@@ -11,10 +11,12 @@ import { GlassIcon } from "../ui/glass";
 import { Icon } from "../ui/icon";
 import { storage } from "../lib/storage";
 import { useWallpaper, useWallpaperColor } from "../lib/wallpaper";
+import { listWallpaperImages, saveWallpaperImage, deleteWallpaperImage } from "../lib/wallpaper/image-store";
+import type { UploadedWallpaperMeta } from "../lib/wallpaper/image-store";
 import { defaultBookmarks } from "../data/default-bookmarks";
 import { defaultCategories } from "../data/default-categories";
 import { searchEngines } from "../data/search-engines";
-import type { Bookmark, Category, Settings } from "../types/domain";
+import type { Bookmark, Category, Settings, WallpaperSource } from "../types/domain";
 
 const DEFAULT_SETTINGS: Settings = {
   theme: "system",
@@ -33,13 +35,21 @@ function saveSettings(settings: Settings): void {
   storage.set("settings", settings);
 }
 
-function loadWallpaperPath(): string | null {
-  return storage.get<string>(WALLPAPER_KEY);
+function loadWallpaperSource(): WallpaperSource | null {
+  const stored = storage.get<unknown>(WALLPAPER_KEY);
+  if (stored === null) return null;
+  if (typeof stored === "string") {
+    return { kind: "preset", path: stored };
+  }
+  if (typeof stored === "object" && stored !== null && "kind" in (stored as Record<string, unknown>)) {
+    return stored as WallpaperSource;
+  }
+  return null;
 }
 
-function saveWallpaperPath(path: string | null): void {
-  if (path) {
-    storage.set(WALLPAPER_KEY, path);
+function saveWallpaperSource(source: WallpaperSource | null): void {
+  if (source) {
+    storage.set(WALLPAPER_KEY, source);
   } else {
     storage.remove(WALLPAPER_KEY);
   }
@@ -114,8 +124,9 @@ export function AppShell() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
   const [categories, setCategories] = useState<Category[]>(loadCategories);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedWallpaper, setSelectedWallpaper] = useState<string | null>(loadWallpaperPath);
-  const wallpaper = useWallpaper(selectedWallpaper, settings.customWallpaperUrl);
+  const [selectedWallpaper, setSelectedWallpaper] = useState<WallpaperSource | null>(loadWallpaperSource);
+  const [uploadedWallpapers, setUploadedWallpapers] = useState<UploadedWallpaperMeta[]>([]);
+  const wallpaper = useWallpaper(selectedWallpaper);
   useWallpaperColor(wallpaper?.url ?? null, settings.theme);
 
   useEffect(() => {
@@ -129,6 +140,10 @@ export function AppShell() {
   useEffect(() => {
     saveCategories(categories);
   }, [categories]);
+
+  useEffect(() => {
+    listWallpaperImages().then(setUploadedWallpapers);
+  }, []);
 
   const engine = searchEngines.find((e) => e.id === settings.searchEngineId) ?? searchEngines[0];
 
@@ -192,10 +207,26 @@ export function AppShell() {
     setSettings(newSettings);
   }, []);
 
-  const handleWallpaperChange = useCallback((path: string | null) => {
-    setSelectedWallpaper(path);
-    saveWallpaperPath(path);
+  const handleWallpaperChange = useCallback((source: WallpaperSource | null) => {
+    setSelectedWallpaper(source);
+    saveWallpaperSource(source);
   }, []);
+
+  const handleUploadWallpaper = useCallback(async (file: File) => {
+    const meta = await saveWallpaperImage(file);
+    setUploadedWallpapers((prev) => [...prev, meta]);
+    setSelectedWallpaper({ kind: "upload", id: meta.id });
+    saveWallpaperSource({ kind: "upload", id: meta.id });
+  }, []);
+
+  const handleDeleteUploadWallpaper = useCallback(async (id: string) => {
+    await deleteWallpaperImage(id);
+    setUploadedWallpapers((prev) => prev.filter((m) => m.id !== id));
+    if (selectedWallpaper?.kind === "upload" && selectedWallpaper.id === id) {
+      setSelectedWallpaper(null);
+      saveWallpaperSource(null);
+    }
+  }, [selectedWallpaper]);
 
   return (
     <ThemeProvider theme={settings.theme}>
@@ -267,8 +298,11 @@ export function AppShell() {
         onClose={() => setShowSettings(false)}
         settings={settings}
         onUpdate={handleSettingsUpdate}
-        selectedWallpaperPath={selectedWallpaper}
+        selectedWallpaper={selectedWallpaper}
         onWallpaperChange={handleWallpaperChange}
+        uploadedWallpapers={uploadedWallpapers}
+        onUploadWallpaper={handleUploadWallpaper}
+        onDeleteUploadWallpaper={handleDeleteUploadWallpaper}
       />
     </ThemeProvider>
   );

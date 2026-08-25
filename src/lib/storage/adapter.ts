@@ -6,7 +6,7 @@ export interface StorageAdapter {
 
 export type { StorageAdapter as StorageAdapterType };
 
-const STORAGE_PREFIX = "start-page-v2.";
+const STORAGE_PREFIX = "start-page-v3.";
 
 export function createStorageAdapter(): StorageAdapter {
   return {
