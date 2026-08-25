@@ -5,7 +5,6 @@ import type { UploadedWallpaperMeta } from "../../lib/wallpaper/image-store";
 import { getWallpaperBlob } from "../../lib/wallpaper/image-store";
 import { searchEngines as allEngines } from "../../data/search-engines";
 import { getWallpaperEntriesWithPath } from "../../lib/wallpaper";
-import { getTerminalToken, setTerminalToken, clearTerminalToken } from "../../lib/terminal/token";
 
 type SettingsDialogProps = {
   open: boolean;
@@ -31,7 +30,6 @@ export function SettingsDialog({
   onDeleteUploadWallpaper,
 }: SettingsDialogProps) {
   const presets = getWallpaperEntriesWithPath();
-  const [tokenInput, setTokenInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function isSelected(source: WallpaperSource | null): boolean {
@@ -164,45 +162,7 @@ export function SettingsDialog({
         </label>
       </div>
 
-      <div className="settings-section">
-        <h3 className="settings-section-title">Terminal</h3>
-        <p className="settings-token-status">
-          Status:{" "}
-          {getTerminalToken() ? (
-            <span className="settings-token-status--ok">Token configured</span>
-          ) : (
-            "Not configured"
-          )}
-        </p>
-        <div className="settings-token-input">
-          <input
-            type="text"
-            placeholder="Paste daemon token here..."
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-          />
-          <button
-            className="settings-token-btn"
-            onClick={() => {
-              if (tokenInput.trim()) {
-                setTerminalToken(tokenInput.trim());
-                setTokenInput("");
-              }
-            }}
-          >
-            Save
-          </button>
-          <button
-            className="settings-token-btn"
-            onClick={() => {
-              clearTerminalToken();
-              setTokenInput("");
-            }}
-          >
-            Clear
-          </button>
-        </div>
-      </div>
+      
     </Dialog>
   );
 }

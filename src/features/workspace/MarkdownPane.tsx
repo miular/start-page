@@ -10,7 +10,6 @@ import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { setMarkdownDoc } from "../../lib/terminal/session";
 
 const transparentTheme = EditorView.theme({
   "&": { background: "transparent", backgroundColor: "transparent", color: "var(--color-text-primary)", height: "100%" },
@@ -71,13 +70,6 @@ export function MarkdownPane({ value, onChange }: MarkdownPaneProps) {
   const previewRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef<string | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setMarkdownDoc(value);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [value]);
 
   useEffect(() => {
     const editorEl = editorRef.current;

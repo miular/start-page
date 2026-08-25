@@ -1,11 +1,8 @@
 import { useState, useCallback } from "react";
-import { WorkspaceTabs } from "./WorkspaceTabs";
 import { MarkdownPane } from "./MarkdownPane";
-import { TerminalPane } from "./TerminalPane";
 import { exportMarkdown, exportMarkdownAsHtml, exportMarkdownAsPdf } from "./markdown-export";
 import { Button } from "../../ui/button";
 import { Icon } from "../../ui/icon";
-import { getMarkdownDoc } from "../../lib/terminal/session";
 
 const defaultMarkdown = `# 欢迎使用 Markdown 编辑器
 
@@ -32,11 +29,8 @@ console.log(hello);
 | 表格 | ✅ |
 `;
 
-type Tab = "markdown" | "terminal";
-
 export function Workspace() {
-  const [activeTab, setActiveTab] = useState<Tab>("markdown");
-  const [markdownValue, setMarkdownValue] = useState(() => getMarkdownDoc() ?? defaultMarkdown);
+  const [markdownValue, setMarkdownValue] = useState(defaultMarkdown);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const handleExportMd = useCallback(async () => {
@@ -54,46 +48,40 @@ export function Workspace() {
     await exportMarkdownAsPdf(markdownValue);
   }, [markdownValue]);
 
-  const exportActions = activeTab === "markdown" ? (
-    <div className="workspace-export-wrapper">
-      <Button
-        variant="ghost"
-        className="workspace-export-btn"
-        onClick={() => setShowExportMenu((v) => !v)}
-        onBlur={() => setTimeout(() => setShowExportMenu(false), 150)}
-        aria-label="Export markdown"
-      >
-        <Icon name="fileDown" size={16} />
-        <span>Export</span>
-      </Button>
-      {showExportMenu && (
-        <div className="workspace-export-menu">
-          <button type="button" className="workspace-export-menu-item" onClick={handleExportMd}>
-            <Icon name="download" size={14} />
-            <span>Export as .md</span>
-          </button>
-          <button type="button" className="workspace-export-menu-item" onClick={handleExportHtml}>
-            <Icon name="download" size={14} />
-            <span>Export as .html</span>
-          </button>
-          <button type="button" className="workspace-export-menu-item" onClick={handleExportPdf}>
-            <Icon name="download" size={14} />
-            <span>Export as .pdf (Print)</span>
-          </button>
-        </div>
-      )}
-    </div>
-  ) : null;
-
   return (
     <div className="workspace-container glass-container">
-      <WorkspaceTabs activeTab={activeTab} onChange={setActiveTab} actions={exportActions} />
+      <div className="workspace-toolbar">
+        <div className="workspace-export-wrapper">
+          <Button
+            variant="ghost"
+            className="workspace-export-btn"
+            onClick={() => setShowExportMenu((v) => !v)}
+            onBlur={() => setTimeout(() => setShowExportMenu(false), 150)}
+            aria-label="Export markdown"
+          >
+            <Icon name="fileDown" size={16} />
+            <span>Export</span>
+          </Button>
+          {showExportMenu && (
+            <div className="workspace-export-menu">
+              <button type="button" className="workspace-export-menu-item" onClick={handleExportMd}>
+                <Icon name="download" size={14} />
+                <span>Export as .md</span>
+              </button>
+              <button type="button" className="workspace-export-menu-item" onClick={handleExportHtml}>
+                <Icon name="download" size={14} />
+                <span>Export as .html</span>
+              </button>
+              <button type="button" className="workspace-export-menu-item" onClick={handleExportPdf}>
+                <Icon name="download" size={14} />
+                <span>Export as .pdf (Print)</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
       <div className="workspace-pane">
-        {activeTab === "markdown" ? (
-          <MarkdownPane value={markdownValue} onChange={setMarkdownValue} />
-        ) : (
-          <TerminalPane />
-        )}
+        <MarkdownPane value={markdownValue} onChange={setMarkdownValue} />
       </div>
     </div>
   );
