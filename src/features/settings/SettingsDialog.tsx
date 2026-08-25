@@ -1,7 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Dialog } from "../../ui/dialog";
 import type { Settings, SearchEngine, ThemeMode, WallpaperSource } from "../../types/domain";
 import type { UploadedWallpaperMeta } from "../../lib/wallpaper/image-store";
+import { getWallpaperBlob } from "../../lib/wallpaper/image-store";
 import { searchEngines as allEngines } from "../../data/search-engines";
 import { getWallpaperEntriesWithPath } from "../../lib/wallpaper";
 import { getTerminalToken, setTerminalToken, clearTerminalToken } from "../../lib/terminal/token";
